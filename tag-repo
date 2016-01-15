@@ -1,5 +1,5 @@
 #! /usr/bin/env bash
-set -e
+set -ex
 
 usage()
 {
@@ -26,8 +26,10 @@ if [ -z "$2" ]; then
     REMOTE=origin
 fi
 
+KEY=$(gpg --list-secret-keys ${GIT_AUTHOR_EMAIL} | grep uid | sed "s/^uid *//")
+
 git checkout $BRANCH
 git pull --ff-only
-git tag -u $GIT_AUTHOR_EMAIL -s -m "$TAG" $TAG
+git tag -u "${KEY}" -m "$TAG" $TAG
 git push $REMOTE $BRANCH
 git push $REMOTE $TAG
