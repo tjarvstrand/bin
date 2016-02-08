@@ -1,15 +1,26 @@
 #!/usr/bin/env python
 
+import json
+import logging
+import os
 import re
 import subprocess
-
 import sys
+import time
+
+config_file = os.environ['HOME'] + '/.scr.json'
+
+logging.basicConfig(format='%(asctime)s %(message)s', level = logging.INFO)
+
+if len(sys.argv) > 3:
+    logging.basicConfig(filename = sys.argv[3])
 
 if len(sys.argv) < 2:
-    print "Error: need a configuration name!"
+    logging.error("Need a configuration name!")
     sys.exit(1)
 
 def call(cmd):
+    logging.info("Calling: %s" % cmd)
     subprocess.check_call(cmd, shell = True)
 
 def mode_sort(modes):
@@ -33,36 +44,157 @@ def modes(output, xrandr_output):
             break
     return modes
 
-xrandr_output = subprocess.check_output("xrandr").split("\n")
+def use_internal(internal, external = None):
+    if external:
+        call("xrandr --output %s --off --output %s --primary --auto" %
+                (external, internal))
+    else:
+        call("xrandr --output %s --primary --auto" %
+                (internal))
 
-active = []
-internal = 'eDP1'
+def use_external(internal, external):
+    call("xrandr --output %s --off --output %s --primary --auto" %
+            (internal, external))
 
-for line in xrandr_output:
-    if re.match("^(.*) connected", line):
-        active.append(line.split()[0])
+def use_right_of(internal, external):
+    call("xrandr --output %s --auto --output %s --auto --right-of %s" %
+             (internal, external, internal))
 
-external = [e for e in active if e != internal][0]
+def use_left_of(internal, external):
+    call("xrandr --output %s --auto --output %s --auto --left-of %s" %
+             (internal, external, internal))
 
-if sys.argv[1] == 'internal':
-    call("xrandr --output %s --off" % external)
-    call("xrandr --output %s --primary --auto" % internal)
-
-if sys.argv[1] == 'external':
-    call("xrandr --output %s --off" % internal)
-    call("xrandr --output %s --primary --auto" % external)
-
-if sys.argv[1] == 'mirror':
-    internal_modes = modes(internal, xrandr_output)
-    external_modes = modes(external, xrandr_output)
+def use_mirror(internal_name, internal_modes, external_name, external_modes):
     best_mode = mode_sort(intersection(internal_modes, external_modes))[0]
-    call("xrandr --output %s --mode %s" % (internal, best_mode))
-    call("xrandr --output %s --mode %s" % (external, best_mode))
+    call("xrandr --output %s --mode %s --output %s --mode %s" %
+          (external_name, best_mode, internal_name, best_mode))
 
-if sys.argv[1] == 'left-of':
-    call("xrandr --output %s --auto" % (internal))
-    call("xrandr --output %s --auto --left-of %s" % (external, internal))
+def get_connected_outputs():
+    outputs = {}
+    xrandr_output = iter(subprocess.check_output(["xrandr", "-q", "--verbose"]).split("\n"))
+    output_name = None
+    field_name = None
+    for line in xrandr_output:
+        if re.match("^(.*) connected", line):
+            output_name = line.split()[0]
+            outputs[output_name] = {'modes': []}
+        elif output_name:
+            match = re.match('^\s*([a-fA-Z0-9][a-zA-Z0-9 ]*):(.*)', line)
+            if match:
+                field_name = match.group(1).lower()
+                value = match.group(2).strip()
+                if value:
+                    outputs[output_name][field_name] = [value]
+                else:
+                    outputs[output_name][field_name] = []
+            else:
+                value = line.strip()
+                match = re.match('^\s*([0-9]*x[0-9]*)', line)
+                if match:
+                    outputs[output_name]['modes'].append(match.group(1))
+                    outputs[output_name][field_name].append(value)
+                elif line != '' :
+                    outputs[output_name][field_name].append(value)
 
-if sys.argv[1] == 'right-of':
-    call("xrandr --output %s --auto" % (internal))
-    call("xrandr --output %s --auto --right-of %s" % (external, internal))
+        #     match = 
+        #     
+        #     else:
+        #         break
+        # if not any(True for _ in xrandr_output):
+        #     brea
+
+    return outputs
+
+def apply_config(config, internal_name, outputs):
+    external_name = [e for e in outputs.keys() if e != internal_name][0]
+    if config == 'internal':
+        use_internal(internal_name, external_name)
+    elif config == 'external':
+        use_external(internal_name, external_name)
+    elif config == 'left-of':
+        use_left_of(internal_name, external_name)
+    elif config == 'right-of':
+        use_right_of(internal_name, external_name)
+    elif config == 'mirror':
+        use_mirror(internal_name, outputs[internal_name]['modes'],
+                   external_name, outputs[external_name]['modes'])
+
+def get_mode(edid):
+    print "1", edid
+    try:
+        with open(config_file) as f:
+            modes = json.load(f)
+            print modes.keys()
+            return modes[edid]
+    except Exception, ex:
+        return None
+
+def store_mode(edid, mode):
+    config = {}
+    try:
+        with open(config_file) as f:
+            config = json.load(f)
+    except:
+        pass
+    config[edid] = mode
+    with open(config_file, 'w') as f:
+        json.dump(config, f)
+
+def do_stuff():
+    outputs = get_connected_outputs()
+    internal = 'eDP1'
+
+    if len(outputs) == 1:
+        mode = 'internal'
+        external = None
+    else:
+        mode = sys.argv[1]
+        external = [e for e in outputs.keys() if e != internal][0]
+
+    if mode == 'auto':
+        if len(sys.argv) > 2:
+            interval = 0.5
+            slept = 0
+            while len(outputs) != min(2, int(sys.argv[2])):
+                    logging.debug("xrandr not up to date, sleeping %ss" %
+                                    [interval])
+                    time.sleep(interval)
+                    slept += interval
+                    outputs = get_connected_outputs()
+        logging.debug("outputs %s" % outputs)
+        mode = get_mode(''.join(outputs[external]['edid']))
+        if mode is None:
+            cmd = "zenity --list --radiolist " + \
+                "--column _ --column Layout " + \
+                "TRUE mirror " + \
+                "FALSE internal " + \
+                "FALSE external " + \
+                "FALSE right-of " + \
+                "FALSE left-of "
+            try:
+                mode = subprocess.check_output(cmd.split()).strip()
+            except subprocess.CalledProcessError:
+                pass
+    if mode:
+        logging.debug("setting mode %s" % mode)
+        store_mode(''.join(outputs[external]['edid']), mode)
+        apply_config(mode, internal, outputs)
+
+def main():
+    pid = str(os.getpid())
+    pidfile = "/tmp/scr.pid"
+
+    if os.path.isfile(pidfile):
+        logging.info("scr is already running, exiting")
+        sys.exit()
+    file(pidfile, 'w').write(pid)
+    try:
+        do_stuff()
+    except Exception, ex:
+        ex
+
+    finally:
+        os.unlink(pidfile)
+        sys.exit()
+
+main()
