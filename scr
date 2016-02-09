@@ -95,36 +95,27 @@ def get_connected_outputs():
                     outputs[output_name][field_name].append(value)
                 elif line != '' :
                     outputs[output_name][field_name].append(value)
-
-        #     match = 
-        #     
-        #     else:
-        #         break
-        # if not any(True for _ in xrandr_output):
-        #     brea
-
     return outputs
 
-def apply_config(config, internal_name, outputs):
-    external_name = [e for e in outputs.keys() if e != internal_name][0]
-    if config == 'internal':
+def apply_mode(mode, internal_name, outputs):
+    logging.info("setting mode %s" % mode)
+    external_name = get_external(internal_name, outputs)
+    if mode == 'internal':
         use_internal(internal_name, external_name)
-    elif config == 'external':
+    elif mode == 'external':
         use_external(internal_name, external_name)
-    elif config == 'left-of':
+    elif mode == 'left-of':
         use_left_of(internal_name, external_name)
-    elif config == 'right-of':
+    elif mode == 'right-of':
         use_right_of(internal_name, external_name)
-    elif config == 'mirror':
+    elif mode == 'mirror':
         use_mirror(internal_name, outputs[internal_name]['modes'],
                    external_name, outputs[external_name]['modes'])
 
 def get_mode(edid):
-    print "1", edid
     try:
         with open(config_file) as f:
             modes = json.load(f)
-            print modes.keys()
             return modes[edid]
     except Exception, ex:
         return None
@@ -140,24 +131,31 @@ def store_mode(edid, mode):
     with open(config_file, 'w') as f:
         json.dump(config, f)
 
+def get_external(internal_name, outputs):
+    all_external = [e for e in outputs.keys() if e != internal_name]
+    if all_external:
+        return all_external[0]
+    else:
+        return None
+
 def do_stuff():
     outputs = get_connected_outputs()
     internal = 'eDP1'
+    external = get_external(internal, outputs)
 
     if len(outputs) == 1:
-        mode = 'internal'
-        external = None
-    else:
-        mode = sys.argv[1]
-        external = [e for e in outputs.keys() if e != internal][0]
+        logging.info("Only one output detected, ignoring input parameters")
+        apply_mode('internal', internal, outputs)
+        return
 
+    mode = sys.argv[1]
     if mode == 'auto':
         if len(sys.argv) > 2:
             interval = 0.5
             slept = 0
             while len(outputs) != min(2, int(sys.argv[2])):
-                    logging.debug("xrandr not up to date, sleeping %ss" %
-                                    [interval])
+                    logging.info("xrandr not up to date, sleeping %ss" %
+                                 [interval])
                     time.sleep(interval)
                     slept += interval
                     outputs = get_connected_outputs()
@@ -176,9 +174,8 @@ def do_stuff():
             except subprocess.CalledProcessError:
                 pass
     if mode:
-        logging.debug("setting mode %s" % mode)
         store_mode(''.join(outputs[external]['edid']), mode)
-        apply_config(mode, internal, outputs)
+        apply_mode(mode, internal, outputs)
 
 def main():
     pid = str(os.getpid())
@@ -191,7 +188,7 @@ def main():
     try:
         do_stuff()
     except Exception, ex:
-        ex
+        logging.error("Error: %s" % ex)
 
     finally:
         os.unlink(pidfile)
