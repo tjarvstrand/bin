@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+for dir in $1/*; do
+    if [[ -d ${dir} ]]; then
+        pushd ${dir} > /dev/null
+        if ! $(git diff --no-ext-diff --quiet); then
+            echo ${dir}
+        fi
+        popd > /dev/null
+    else
+        echo "No such directory"
+    fi
+done
