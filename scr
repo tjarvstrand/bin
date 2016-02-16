@@ -187,9 +187,6 @@ def main():
     file(pidfile, 'w').write(pid)
     try:
         do_stuff()
-    except Exception, ex:
-        logging.error("Error: %s" % ex)
-
     finally:
         os.unlink(pidfile)
         sys.exit()
