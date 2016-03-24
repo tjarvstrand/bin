@@ -46,11 +46,12 @@ def modes(output, xrandr_output):
 
 def use_internal(internal, external = None):
     if external:
-        call("xrandr --output %s --off --output %s --primary --auto" %
-                (external, internal))
-    else:
-        call("xrandr --output %s --primary --auto" %
-                (internal))
+        try:
+            call("xrandr --output %s --off" % external)
+        except Exception as e:
+            logging.error("Failed to turn off %s: %s" % (external, e))
+
+    call("xrandr --output %s --primary --auto" % internal)
 
 def use_external(internal, external):
     call("xrandr --output %s --off --output %s --primary --auto" %
@@ -143,7 +144,7 @@ def do_stuff():
     internal = 'eDP1'
     external = get_external(internal, outputs)
 
-    if len(outputs) == 1:
+    if len(outputs) == 1 or (len(sys.argv) > 2 and int(sys.argv[2]) == 1):
         logging.info("Only one output detected, ignoring input parameters")
         apply_mode('internal', internal, outputs)
         return
@@ -187,8 +188,12 @@ def main():
     file(pidfile, 'w').write(pid)
     try:
         do_stuff()
+    except Exception as e:
+        logging.exception(e)
+        logging.error("Failed to set mode %s. Turning on internal display")
+        use_internal('eDP1', None)
     finally:
         os.unlink(pidfile)
-        sys.exit()
+    sys.exit()
 
 main()
