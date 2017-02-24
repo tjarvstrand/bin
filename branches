@@ -5,7 +5,11 @@ for dir in $1/*; do
     if [[ -d ${dir} ]]; then
         pushd ${dir} > /dev/null
         branch=$(git branch | sed -n -e 's/^\* \(.*\)/\1/p')
-        if [[ "${branch}" != "master" && ! "${branch}" =~ ^\((HEAD )?detached ]]; then
+        if
+            [[ "${branch}" != "master" &&
+               ! "${branch}" =~ "(no branch)" &&
+               ! "${branch}" =~ ^\((HEAD )?detached ]]
+        then
             branches="${branches}\n${dir} ${branch}"
         fi
         popd > /dev/null

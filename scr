@@ -159,6 +159,8 @@ def do_stuff():
                                  [interval])
                     time.sleep(interval)
                     slept += interval
+                    if slept > 60:
+                        raise Exception("Timeout!")
                     outputs = get_connected_outputs()
         logging.debug("outputs %s" % outputs)
         mode = get_mode(''.join(outputs[external]['edid']))

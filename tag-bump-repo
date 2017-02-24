@@ -1,0 +1,43 @@
+#! /usr/bin/env bash
+
+usage()
+{
+    cat << EOF
+Usage: `basename $0` major|minor|patch
+EOF
+}
+
+if [ $# -lt 1 ]; then
+    usage
+    exit 1
+fi
+
+git fetch
+TAG=$(git describe origin/master | grep -o '^[0-9.]*')
+
+echo $TAG
+
+MAJOR=$(echo ${TAG} | cut -d '.' -f 1)
+MINOR=$(echo ${TAG} | cut -d '.' -f 2)
+PATCH=$(echo ${TAG} | cut -d '.' -f 3)
+
+case $1 in
+    "major")
+        let "MAJOR=${MAJOR}+1"
+        MINOR=0
+        PATCH=0
+        ;;
+    "minor")
+        let "MINOR=${MINOR}+1"
+        PATCH=0
+        ;;
+    "patch")
+        let "PATCH=${PATCH}+1"
+        ;;
+    *)
+        echo "Error: invalid version specifier (major|minor|patch)"
+        exit 1
+        ;;
+esac
+
+exec tag-repo "${MAJOR}.${MINOR}.${PATCH}"
