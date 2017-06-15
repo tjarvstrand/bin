@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+SSH_ENV="$HOME/.ssh/environment"
+function start_ssh_agent {
+    echo "Initialising new SSH agent..."
+    /usr/bin/ssh-agent | sed 's/^echo/#echo/' > "${SSH_ENV}"
+    echo succeeded
+    chmod 600 "${SSH_ENV}"
+    . "${SSH_ENV}" > /dev/null
+}
+
+
+function ensure_ssh_agent_started {
+    if [ -f "${SSH_ENV}" ]; then
+        . "${SSH_ENV}" > /dev/null
+        ps -ef | grep ${SSH_AGENT_PID} | grep ssh-agent$ > /dev/null || {
+            start_agent;
+        }
+    else
+        start_ssh_agent;
+    fi
+}
+
+function ensure_ssh_key_added {
+    if ssh-add -l | cut -d ' ' -f 3 | grep ${HOME}/.ssh/id_rsa > /dev/null; then
+        echo id_rsa already added to agent >&2
+    else
+       ssh-add >&2
+    fi
+}
+
+ensure_ssh_agent_started
+ensure_ssh_key_added
