@@ -8,6 +8,8 @@ import subprocess
 import sys
 import time
 
+internal_display = 'eDP-1'
+
 config_file = os.environ['HOME'] + '/.scr.json'
 
 logging.basicConfig(format='%(asctime)s %(message)s', level = logging.INFO)
@@ -141,7 +143,7 @@ def get_external(internal_name, outputs):
 
 def do_stuff():
     outputs = get_connected_outputs()
-    internal = 'eDP1'
+    internal = internal_display
     external = get_external(internal, outputs)
 
     if len(outputs) == 1 or (len(sys.argv) > 2 and int(sys.argv[2]) == 1):
@@ -193,7 +195,7 @@ def main():
     except Exception as e:
         logging.exception(e)
         logging.error("Failed to set mode %s. Turning on internal display")
-        use_internal('eDP1', None)
+        use_internal(internal_display, None)
     finally:
         os.unlink(pidfile)
     sys.exit()
