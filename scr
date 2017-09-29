@@ -12,7 +12,11 @@ internal_display = 'eDP-1'
 
 config_file = os.environ['HOME'] + '/.scr.json'
 
+configurations = ['mirror', 'internal', 'external']
+
 logging.basicConfig(format='%(asctime)s %(message)s', level = logging.INFO)
+
+print sys.argv
 
 if len(sys.argv) > 3:
     logging.basicConfig(filename = sys.argv[3])
@@ -78,9 +82,11 @@ def get_connected_outputs():
     output_name = None
     field_name = None
     for line in xrandr_output:
-        if re.match("^(.*) connected", line):
+        match = re.match("^(.*) connected (primary)?", line)
+        if match:
             output_name = line.split()[0]
-            outputs[output_name] = {'modes': []}
+            outputs[output_name] = {'modes': [],
+                                    'primary': match.groups()[1] == 'primary'}
         elif output_name:
             match = re.match('^\s*([a-fA-Z0-9][a-zA-Z0-9 ]*):(.*)', line)
             if match:
@@ -99,6 +105,13 @@ def get_connected_outputs():
                 elif line != '' :
                     outputs[output_name][field_name].append(value)
     return outputs
+
+def get_primary_output():
+    primary = [output for (output, props) in get_connected_outputs().iteritems() if props['primary']]
+    if primary == []:
+        return None
+    else:
+        return primary[0]
 
 def apply_mode(mode, internal_name, outputs):
     logging.info("setting mode %s" % mode)
@@ -141,7 +154,8 @@ def get_external(internal_name, outputs):
     else:
         return None
 
-def do_stuff():
+def do_stuff(opts):
+    mode = opts['mode']
     outputs = get_connected_outputs()
     internal = internal_display
     external = get_external(internal, outputs)
@@ -151,7 +165,6 @@ def do_stuff():
         apply_mode('internal', internal, outputs)
         return
 
-    mode = sys.argv[1]
     if mode == 'auto':
         if len(sys.argv) > 2:
             interval = 0.5
@@ -178,9 +191,21 @@ def do_stuff():
                 mode = subprocess.check_output(cmd.split()).strip()
             except subprocess.CalledProcessError:
                 pass
+    elif mode == 'toggle':
+        if get_primary_output() == internal_display:
+            mode = 'external'
+        else:
+            mode = 'internal'
+
     if mode:
-        store_mode(''.join(outputs[external]['edid']), mode)
+        if opts['save']:
+            store_mode(''.join(outputs[external]['edid']), mode)
         apply_mode(mode, internal, outputs)
+
+def parse_args(args):
+    return {'mode': args[1],
+            'save': not args[4:4+1] == []
+           }
 
 def main():
     pid = str(os.getpid())
@@ -191,10 +216,11 @@ def main():
         sys.exit()
     file(pidfile, 'w').write(pid)
     try:
-        do_stuff()
+        opts = parse_args(sys.argv)
+        do_stuff(opts)
     except Exception as e:
         logging.exception(e)
-        logging.error("Failed to set mode %s. Turning on internal display")
+        logging.error("Failed to set mode %s. Turning on internal display" % opts['mode'])
         use_internal(internal_display, None)
     finally:
         os.unlink(pidfile)

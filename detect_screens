@@ -1,7 +1,52 @@
 #!/bin/bash
+
+THIS_DIR=$(dirname "$(readlink -f $0)")
+
+CONNECTED=$("${THIS_DIR}/connected-screens" | wc -l)
+
+echo "${CONNECTED} screens connected"
+
 export XAUTHORITY=/home/tjarvstrand/.Xauthority
 export DISPLAY=:0
-BUSSES=( $(get-edid 2>&1 | grep "potential busses found:" | cut -d ':' -f 2) )
-#test with nohup
-#nohup su tjarvstrand -l -c "scr auto ${#BUSSES[@]} /home/tjarvstrand/udev.log" &>> /home/tjarvstrand/udev.log
-nohup su tjarvstrand -l -c "scr internal dummy-arg /home/tjarvstrand/udev.log" &>> /home/tjarvstrand/udev.log
+export HOME=$(eval echo ~tjarvstrand)
+
+INTERNAL='eDP-1'
+CONFIG_FILE="${HOME}/.screens"
+[ -f "${CONFIG_FILE}" ] || touch "${CONFIG_FILE}"
+
+function internal {
+    EXTERNAL=$("${THIS_DIR}/connected-screens" | grep -v ${INTERNAL})
+    xrandr --output ${INTERNAL} --primary --auto --output ${EXTERNAL} --off
+}
+
+function external {
+    EXTERNAL=$("${THIS_DIR}/connected-screens" | grep -v ${INTERNAL})
+    xrandr --output ${EXTERNAL} --primary --auto --output ${INTERNAL} --off
+}
+
+if [ "${CONNECTED}" == "1" ]
+then
+    internal
+else
+    MONITORS=$("${THIS_DIR}/connected-screens" | \
+                   sort | \
+                   xargs echo | \
+                   tr ' ' ',')
+    echo $MONITORS
+    EDIDS=$(eval "cat /sys/class/drm/card*-{${MONITORS}}/edid" | base64)
+    if [ "${1}" == "--set" ]
+    then
+        sed -i 's/${EDIDS}.*//' "${CONFIG_FILE}"
+        echo "${EDIDS} ${2}" >> "${CONFIG_FILE}"
+        eval ${2}
+    else
+        CONFIG_LINE=$(grep -E "^${EDIDS}" "${CONFIG_FILE}")
+        echo ${CONFIG_LINE}
+        if [ "$?" == "0" ]
+        then
+            CONFIG=$(echo ${CONFIG_LINE} | awk '{print $NF}')
+            echo "config: $CONFIG"
+            eval ${CONFIG}
+        fi
+    fi
+fi

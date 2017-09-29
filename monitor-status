@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-
-cd /sys/class/drm
-
-for s in card*
-do
-    [ -f $s/status ] && echo $s $(cat $s/status) | grep "\sconnected";
-done
