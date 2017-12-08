@@ -3,7 +3,10 @@
 usage()
 {
     cat << EOF
-Usage: `basename $0` major|minor|patch
+Usage: `basename $0` [-u|--unannotated] major|minor|patch
+
+--unannotated, -u Include unannotated tags when looking for current version tag
+
 EOF
 }
 
@@ -12,10 +15,25 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-git fetch
-TAG=$(git describe origin/master | grep -o '^[0-9.]*')
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+    key="${1}"
+    case $key in
+        -u|--unannotated)
+            TAGS=--tags
+            shift
+            ;;
+        *)    # unknown option
+            POSITIONAL+=("${1}") # save it in an array for later
+            shift # past argument
+            ;;
+    esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
 
-echo $TAG
+git fetch
+TAG=$(git describe origin/master ${TAGS} | grep -o '^[0-9.]*')
 
 MAJOR=$(echo ${TAG} | cut -d '.' -f 1)
 MINOR=$(echo ${TAG} | cut -d '.' -f 2)
@@ -31,8 +49,9 @@ case $1 in
         let "MINOR=${MINOR}+1"
         PATCH=0
         ;;
-    "patch")
+    "patch"|"")
         let "PATCH=${PATCH}+1"
+        echo 1
         ;;
     *)
         echo "Error: invalid version specifier (major|minor|patch)"
