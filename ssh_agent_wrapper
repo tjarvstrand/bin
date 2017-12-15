@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+unset SSH_ASKPASS
+unset GIT_ASKPASS
+
 ARG=${1}
 
 function log {
