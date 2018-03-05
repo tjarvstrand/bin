@@ -13,7 +13,7 @@ case ${OP} in
         VOLUME=$(( ${VOLUME} - ${AMOUNT} ))
         ;;
     "set")
-        VOLUME=${VOLUME}
+        VOLUME=${AMOUNT}
         ;;
     "get")
         echo ${VOLUME}
