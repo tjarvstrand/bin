@@ -40,4 +40,4 @@ function ensure_ssh_key_added {
 
 ensure_ssh_agent_started
 ensure_ssh_key_added
-exec ssh "$@"
+exec $(non_bin_exec ssh) "$@"
