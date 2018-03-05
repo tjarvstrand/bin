@@ -5,6 +5,8 @@ unset GIT_ASKPASS
 
 ARG=${1}
 
+LPASS=lpass
+
 function log {
     if [[ "${ARG}" != "-q" ]]
     then
@@ -23,18 +25,26 @@ function start_ssh_agent {
 function ensure_ssh_agent_started {
     if [ -f "${SSH_ENV}" ]; then
         . "${SSH_ENV}" > /dev/null
-        ps -eo pid | grep ${SSH_AGENT_PID} > /dev/null && return
+        ps -eo pid | grep -q ${SSH_AGENT_PID} && return
         rm -f "${SSH_ENV}"
     fi
     start_ssh_agent;
 }
 
 function ensure_ssh_key_added {
-    if ssh-add -l | cut -d ' ' -f 3 | grep ${HOME}/.ssh/id_rsa > /dev/null
+    export LPASS_SSH_KEY_ID=tjarvstrand
+    PUB_KEY=$(${LPASS} show --field='Public Key' ssh/${LPASS_SSH_KEY_ID})
+    FINGERPRINT=$(ssh-keygen -lf /dev/stdin <<<${PUB_KEY} | cut -d ' ' -f 2)
+    if ssh-add -l | grep -q ${FINGERPRINT}
     then
         log id_rsa already added to agent
     else
-        log $(ssh-add)
+        FIFO=$(mktemp -u --suffix=.${LPASS_SSH_KEY_ID})
+        mkfifo -m 600 ${FIFO}
+        trap "rm -rf ${FIFO}" EXIT
+        ${LPASS} show --field='Private Key' ssh/${LPASS_SSH_KEY_ID} > ${FIFO} &
+        SSH_ASKPASS=lpass-ssh-askpass
+        log $(ssh-add ${FIFO} < /dev/null)
     fi
 }
 
