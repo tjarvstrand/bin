@@ -1,10 +1,16 @@
 #!/bin/bash
 
+set -x
+
 export XAUTHORITY=/home/tjarvstrand/.Xauthority
 export DISPLAY=:0
 export HOME=$(eval echo ~tjarvstrand)
 INTERNAL='eDP-1'
 CONFIG_FILE="${HOME}/.screens"
+if [ ! -f "${CONFIG_FILE}" ]
+then
+    touch ${CONFIG_FILE}
+fi
 
 THIS_DIR=$(dirname "$(readlink -f $0)")
 
@@ -25,6 +31,15 @@ do
     esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
+
+function output2dir {
+    PATTERN="card.-$(echo $1 | cut -d'-' -f 1)-[A-Z]-$(echo $1 | cut -d'-' -f 2)"
+    ls -1d /sys/class/drm/card*/ | grep ${PATTERN}
+}
+
+function output_modes {
+    cat $(output2dir $1)/modes | sort | uniq
+}
 
 function internal {
     EXTERNAL=$("${THIS_DIR}/connected-screens" | grep -v ${INTERNAL})
@@ -47,7 +62,7 @@ function mirror {
     EXTERNAL=$("${THIS_DIR}/connected-screens" | grep -v ${INTERNAL})
     if [ "${EXTERNAL}" != "" ]
     then
-        xrandr --output ${INTERNAL} --primary --auto --output ${EXTERNAL} --same-as ${INTERNAL}
+        xrandr --output ${INTERNAL} --primary --on --output ${EXTERNAL} --on --same-as ${INTERNAL}
     fi
 }
 
@@ -88,7 +103,7 @@ fi
 
 if [ "${SET}" == "true" ]
 then
-    echo "Writing writing mode ${ACTION} to config for current external monitor EDID"
+    echo "Writing writing mode ${ACTION} to config for current external monitor $EDIDS"
     sed -i 's/${EDIDS}.*//' "${CONFIG_FILE}"
     echo "${EDIDS} ${2}" >> "${CONFIG_FILE}"
 fi
