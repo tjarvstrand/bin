@@ -1,6 +1,3 @@
 #!/bin/bash
 
-(
-trap - SIGINT
-exec /bin/bash /usr/local/bin/idea "$@"
-) &
+${DIR}/trap-sigint /usr/local/bin/idea
